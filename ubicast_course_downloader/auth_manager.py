@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import platform
 import re
 import shutil
 import stat
@@ -12,6 +13,7 @@ from typing import Dict, Optional
 from urllib.parse import urlparse
 
 
+APP_NAME = "ubicast-course-downloader"
 DEFAULT_RUNTIME_DIR = "~/Library/Application Support/ubicast-course-downloader"
 SECRET_NAMES = (
     "WEBTV_COOKIE",
@@ -41,7 +43,13 @@ def redact(text: object) -> str:
 
 
 def runtime_path(runtime_dir: Optional[str] = None) -> Path:
-    raw = runtime_dir or os.environ.get("UBICAST_RUNTIME_DIR") or DEFAULT_RUNTIME_DIR
+    raw = runtime_dir or os.environ.get("UBICAST_RUNTIME_DIR")
+    if not raw:
+        if platform.system() == "Windows":
+            appdata = os.environ.get("APPDATA")
+            raw = str(Path(appdata) / APP_NAME) if appdata else str(Path.home() / "AppData" / "Roaming" / APP_NAME)
+        else:
+            raw = DEFAULT_RUNTIME_DIR
     return Path(raw).expanduser()
 
 
@@ -184,9 +192,10 @@ def browser_login(course_url: str, force_login: bool = False, runtime_dir: Optio
 
     webdriver, Options = _require_selenium()
     options = Options()
-    firefox_app = Path("/Applications/Firefox.app/Contents/MacOS/firefox")
-    if firefox_app.exists():
-        options.binary_location = str(firefox_app)
+    if platform.system() == "Darwin":
+        firefox_app = Path("/Applications/Firefox.app/Contents/MacOS/firefox")
+        if firefox_app.exists():
+            options.binary_location = str(firefox_app)
     options.add_argument("-profile")
     options.add_argument(str(profile_dir))
 

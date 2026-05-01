@@ -4,6 +4,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 import auth_manager
 import ubicast_course_downloader as ucd
@@ -80,6 +81,12 @@ class ExtractorTests(unittest.TestCase):
     def test_process_course_url_exists_for_gui(self):
         self.assertTrue(callable(ucd.process_course_url))
         self.assertIsNone(ucd.last_course_dir())
+
+    def test_windows_default_runtime_uses_appdata(self):
+        with mock.patch("auth_manager.platform.system", return_value="Windows"):
+            with mock.patch.dict("auth_manager.os.environ", {"APPDATA": r"C:\Users\Test\AppData\Roaming"}, clear=True):
+                path = auth_manager.runtime_path()
+        self.assertEqual(str(path), r"C:\Users\Test\AppData\Roaming/ubicast-course-downloader")
 
 
 if __name__ == "__main__":

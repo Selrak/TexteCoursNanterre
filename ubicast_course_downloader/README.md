@@ -4,7 +4,7 @@ Outil local pour récupérer les sous-titres VTT de cours Moodle / UbiCast / Web
 
 Le projet contient uniquement le code. Les cookies, profils navigateur, états de session et fichiers téléchargés ne doivent pas être versionnés.
 
-## Installation
+## Installation macOS
 
 ```sh
 python3 -m venv .venv
@@ -12,10 +12,34 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
+Version simple:
+
+```sh
+./installer_macos.command
+./telecharger_cours.command
+```
+
+## Installation Windows
+
+Installez Python 3 et Firefox, puis double-cliquez:
+
+```text
+installer_windows.bat
+telecharger_cours.bat
+```
+
+Si Windows demande avec quelle application ouvrir le fichier, lancez-le depuis l'invite de commandes dans le dossier du projet:
+
+```bat
+py -3 -m pip install -r requirements.txt
+py -3 telecharger_cours.py
+```
+
 ## Architecture
 
 - Dossier projet: code seulement, visible par Codex.
-- Dossier runtime secret: `~/Library/Application Support/ubicast-course-downloader/`.
+- Dossier runtime secret macOS: `~/Library/Application Support/ubicast-course-downloader/`.
+- Dossier runtime secret Windows: `%APPDATA%\ubicast-course-downloader\`.
 - Dossier runtime configurable avec `UBICAST_RUNTIME_DIR` ou `--runtime-dir`.
 - Ne lancez pas Codex dans le dossier runtime.
 - Ne lancez pas Codex avec accès complet au disque pour ce projet.
@@ -28,6 +52,12 @@ Le dossier runtime peut contenir `.env`, `browser-profile/`, `storage_state.json
 mkdir -p "$HOME/Library/Application Support/ubicast-course-downloader"
 cp config.example.env "$HOME/Library/Application Support/ubicast-course-downloader/.env"
 nano "$HOME/Library/Application Support/ubicast-course-downloader/.env"
+```
+
+Sous Windows, le chemin equivalent est:
+
+```text
+%APPDATA%\ubicast-course-downloader\.env
 ```
 
 Ne créez pas de vrai `.env` dans le dossier projet.
@@ -62,6 +92,12 @@ Interface simple:
 
 ```sh
 python3 telecharger_cours.py
+```
+
+Sous Windows:
+
+```bat
+py -3 telecharger_cours.py
 ```
 
 Cette fenêtre demande l'URL Moodle, télécharge les VTT, puis lance le traitement local vers le dossier `processed/`.
