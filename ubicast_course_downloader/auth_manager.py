@@ -6,10 +6,11 @@ import platform
 import re
 import shutil
 import stat
+import time
 from http.cookies import SimpleCookie
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 from urllib.parse import urlparse
 
 
@@ -165,12 +166,13 @@ def ensure_authenticated(
 def _require_selenium():
     try:
         from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options as ChromeOptions
         from selenium.webdriver.firefox.options import Options
     except ImportError as exc:
         raise RuntimeError(
             "selenium non installé. Lancez: python3 -m pip install -r requirements.txt"
         ) from exc
-    return webdriver, Options
+    return webdriver, Options, ChromeOptions
 
 
 def _cookie_header(cookies) -> str:
@@ -183,36 +185,84 @@ def _cookie_header(cookies) -> str:
     return "; ".join(pairs)
 
 
-def browser_login(course_url: str, force_login: bool = False, runtime_dir: Optional[str] = None) -> Path:
-    runtime = ensure_runtime_dir(runtime_dir)
-    profile_dir = runtime / "browser-profile"
-    if force_login and profile_dir.exists():
-        shutil.rmtree(profile_dir)
-    profile_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+def _browser_candidates(runtime: Path, force_login: bool):
+    firefox_profile = runtime / "browser-profile"
+    chrome_profile = runtime / "browser-profile-chrome"
+    if force_login:
+        for profile_dir in (firefox_profile, chrome_profile):
+            if profile_dir.exists():
+                shutil.rmtree(profile_dir)
+    firefox_profile.mkdir(mode=0o700, parents=True, exist_ok=True)
+    chrome_profile.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-    webdriver, Options = _require_selenium()
-    options = Options()
+    webdriver, FirefoxOptions, ChromeOptions = _require_selenium()
+
+    firefox_options = FirefoxOptions()
     if platform.system() == "Darwin":
         firefox_app = Path("/Applications/Firefox.app/Contents/MacOS/firefox")
         if firefox_app.exists():
-            options.binary_location = str(firefox_app)
-    options.add_argument("-profile")
-    options.add_argument(str(profile_dir))
+            firefox_options.binary_location = str(firefox_app)
+    firefox_options.add_argument("-profile")
+    firefox_options.add_argument(str(firefox_profile))
 
-    try:
-        driver = webdriver.Firefox(options=options)
-    except Exception as exc:
+    chrome_options = ChromeOptions()
+    chrome_options.add_argument(f"--user-data-dir={chrome_profile}")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--no-default-browser-check")
+
+    return (
+        ("Firefox", lambda: webdriver.Firefox(options=firefox_options)),
+        ("Chrome", lambda: webdriver.Chrome(options=chrome_options)),
+    )
+
+
+def browser_login(
+    course_url: str,
+    force_login: bool = False,
+    runtime_dir: Optional[str] = None,
+    confirm_callback: Optional[Callable[[], None]] = None,
+    wait_for_auth: bool = False,
+    wait_timeout: int = 300,
+) -> Path:
+    runtime = ensure_runtime_dir(runtime_dir)
+
+    driver = None
+    errors = []
+    for browser_name, make_driver in _browser_candidates(runtime, force_login):
+        try:
+            driver = make_driver()
+            print(f"Navigateur d'authentification ouvert: {browser_name}.")
+            break
+        except Exception as exc:
+            errors.append(f"{browser_name}: {exc}")
+    if driver is None:
         raise RuntimeError(
-            "Impossible de démarrer Firefox avec Selenium. "
-            "Vérifiez que Firefox s'ouvre normalement et que geckodriver est disponible."
-        ) from exc
+            "Impossible de démarrer Firefox ou Chrome avec Selenium. "
+            "Vérifiez qu'un de ces navigateurs s'ouvre normalement et que Selenium Manager peut fournir le pilote."
+        )
     try:
         driver.get(course_url)
-        print("Connectez-vous dans la fenêtre Firefox dédiée, puis appuyez sur Entrée ici.")
-        try:
-            input()
-        except EOFError:
-            raise RuntimeError("Login interrompu avant confirmation dans le terminal.")
+        if wait_for_auth:
+            print("Connectez-vous dans la fenêtre du navigateur dédiée. Le téléchargement reprendra automatiquement après connexion.")
+            deadline = time.monotonic() + wait_timeout
+            while time.monotonic() < deadline:
+                current_host = urlparse(driver.current_url).netloc
+                cookies = _cookie_header(driver.get_cookies())
+                if "coursenligne.parisnanterre.fr" in current_host and "MoodleSession=" in cookies:
+                    print("Connexion Moodle détectée.")
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError("Authentification Moodle non détectée avant expiration du délai.")
+        elif confirm_callback is None:
+            print("Connectez-vous dans la fenêtre du navigateur dédiée, puis appuyez sur Entrée ici.")
+            try:
+                input()
+            except EOFError:
+                raise RuntimeError("Login interrompu avant confirmation dans le terminal.")
+        else:
+            print("Connectez-vous dans la fenêtre du navigateur dédiée, puis confirmez dans l'interface.")
+            confirm_callback()
 
         driver.get(course_url)
         current_host = urlparse(driver.current_url).netloc

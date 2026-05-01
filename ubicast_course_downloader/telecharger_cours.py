@@ -8,28 +8,65 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
+from auth_manager import browser_login
 from ubicast_course_downloader import last_course_dir, process_course_url
 
 
 ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = ROOT.parent
 DEFAULT_OUT = ROOT / "downloads"
+LOG_DIR = DEFAULT_OUT / "logs"
 POSTPROCESS_SCRIPT = PROJECT_ROOT / "traiter_texte_cours.py"
 
 
-class LogWriter:
-    def __init__(self, callback):
+class RunLogWriter:
+    def __init__(self, callback, log_path):
         self.callback = callback
+        self.log_path = Path(log_path)
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.log_file = self.log_path.open("a", encoding="utf-8", newline="")
+        self.buffer = ""
+        self.lock = threading.Lock()
 
     def write(self, text):
         if text:
             self.callback(text)
+            with self.lock:
+                self.buffer += text
+                self._drain_complete_lines()
 
     def flush(self):
-        pass
+        with self.lock:
+            if self.buffer:
+                self._write_line(self.buffer, ending="")
+                self.buffer = ""
+            self.log_file.flush()
+
+    def close(self):
+        with self.lock:
+            if self.buffer:
+                self._write_line(self.buffer, ending="")
+                self.buffer = ""
+            self.log_file.flush()
+            self.log_file.close()
+
+    def _drain_complete_lines(self):
+        while True:
+            newline_index = self.buffer.find("\n")
+            if newline_index < 0:
+                break
+            line = self.buffer[:newline_index]
+            self.buffer = self.buffer[newline_index + 1 :]
+            self._write_line(line, ending="\n")
+
+    def _write_line(self, line, ending):
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.log_file.write(f"[{stamp}] {line}{ending}")
+        self.log_file.flush()
 
 
 class App:
@@ -41,6 +78,8 @@ class App:
 
         self.url_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Prêt.")
+        self.current_log_path = None
+        self.log_writer = None
 
         tk.Label(self.root, text="Collez ci-dessous l'URL Moodle du cours", bg="#f4f4f4").pack(
             anchor="w", padx=16, pady=(16, 4)
@@ -73,6 +112,12 @@ class App:
         self.log.pack(fill="both", expand=True, padx=12, pady=12)
 
     def append_log(self, text):
+        if self.log_writer is not None:
+            self.log_writer.write(text)
+        else:
+            self.root.after(0, self._append_log, text)
+
+    def _append_log_async(self, text):
         self.root.after(0, self._append_log, text)
 
     def _append_log(self, text):
@@ -89,6 +134,7 @@ class App:
         if not url:
             messagebox.showerror("URL manquante", "Collez l'URL Moodle du cours.")
             return
+        self.current_log_path = self.make_log_path()
         self.button.config(state="disabled")
         self.log.config(state=tk.NORMAL)
         self.log.delete("1.0", "end")
@@ -96,12 +142,27 @@ class App:
         thread = threading.Thread(target=self.run_pipeline, args=(url,), daemon=True)
         thread.start()
 
+    def make_log_path(self):
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return LOG_DIR / f"session_{stamp}.log"
+
     def run_pipeline(self, url):
-        writer = LogWriter(self.append_log)
+        writer = RunLogWriter(self._append_log_async, self.current_log_path or self.make_log_path())
+        self.log_writer = writer
         try:
             self.set_status("Téléchargement des sous-titres...")
             with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
                 code = process_course_url(url, out=str(DEFAULT_OUT), mode="requests")
+            if code == 2:
+                self.set_status("Authentification Moodle requise...")
+                self.append_log("\nAuthentification Moodle requise. Ouverture du navigateur...\n")
+                with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
+                    browser_login(url, wait_for_auth=True)
+                self.append_log("\nAuthentification enregistrée. Reprise du téléchargement...\n")
+                self.set_status("Téléchargement des sous-titres...")
+                with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
+                    code = process_course_url(url, out=str(DEFAULT_OUT), mode="requests")
             if code != 0:
                 raise RuntimeError("Le téléchargement n'a pas abouti pour toutes les séances.")
 
@@ -112,7 +173,7 @@ class App:
             processed_dir = course_dir / "processed"
             self.set_status("Transformation des VTT en texte...")
             self.append_log(f"\nTraitement local: {vtt_dir}\n")
-            subprocess.run(
+            completed = subprocess.run(
                 [
                     sys.executable,
                     str(POSTPROCESS_SCRIPT),
@@ -121,11 +182,15 @@ class App:
                     "--outdir",
                     str(processed_dir),
                 ],
-                check=True,
+                check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
+            if completed.stdout:
+                writer.write(completed.stdout)
+            if completed.returncode != 0:
+                raise RuntimeError("Le post-traitement n'a pas abouti.")
             self.set_status("Terminé.")
             self.append_log(f"\nTerminé.\nDossier: {course_dir}\n")
             self.root.after(0, lambda: messagebox.showinfo("Terminé", f"Cours téléchargé et traité.\n\n{course_dir}"))
@@ -134,6 +199,8 @@ class App:
             self.append_log(f"\nErreur: {exc}\n")
             self.root.after(0, lambda: messagebox.showerror("Erreur", str(exc)))
         finally:
+            writer.close()
+            self.log_writer = None
             self.root.after(0, lambda: self.button.config(state="normal"))
 
     def run(self):
