@@ -1,0 +1,11 @@
+.env
+.env.*
+.auth/
+.browser-profile/
+runtime/
+downloads/
+sous_titres/
+*.html
+*.log
+__pycache__/
+.venv/
