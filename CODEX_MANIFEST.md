@@ -73,4 +73,4 @@ Ce fichier reprend la sortie visible de la zone "Activité" avec un horodatage �
 
 Si l'utilisateur donne une nouvelle idée générale ou une nouvelle direction de produit, Codex doit la documenter dans `SPECIFICATIONS.md`.
 
-Quand un problème est résolu ou qu'une fonctionnalité est terminée, Codex doit créer un commit, puis pousser ce commit sur le dépôt GitHub.
+Quand un problème est résolu ou qu'une fonctionnalité est terminée, Codex ne doit pas créer de commit ni pousser automatiquement. Codex doit attendre que l'utilisateur confirme, après un test physique de l'application, que tout est conforme à ce qu'il veut. Le commit et le push ne doivent être faits qu'après cette confirmation explicite.
