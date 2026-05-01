@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+import auth_manager
 import ubicast_course_downloader as ucd
 
 
@@ -46,6 +49,17 @@ class ExtractorTests(unittest.TestCase):
         html = "<title>CAS - Central Authentication Service Connexion</title>"
         url = "https://cas.parisnanterre.fr/login?service=https%3A%2F%2Fcoursenligne.parisnanterre.fr%2Flogin%2Findex.php"
         self.assertTrue(ucd.is_login_page(html, url))
+
+    def test_cookie_header_builds_cookie_string(self):
+        cookies = [{"name": "MoodleSession", "value": "abc"}, {"name": "theme", "value": "boost"}]
+        self.assertEqual(auth_manager._cookie_header(cookies), "MoodleSession=abc; theme=boost")
+
+    def test_write_runtime_env_is_runtime_local(self):
+        with TemporaryDirectory() as tmp:
+            auth_manager.write_runtime_env({"MOODLE_COOKIE": "MoodleSession=abc"}, tmp)
+            env_path = Path(tmp) / ".env"
+            self.assertTrue(env_path.exists())
+            self.assertIn("MOODLE_COOKIE=", env_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

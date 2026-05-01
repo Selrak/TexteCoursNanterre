@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 from urllib.parse import parse_qs, quote, urljoin, urlparse
 
-from auth_manager import browser_login_message, ensure_authenticated, redact
+from auth_manager import browser_login, ensure_authenticated, redact
 
 
 MOODLE_HOST = "coursenligne.parisnanterre.fr"
@@ -388,7 +388,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.login or args.force_login:
-        print(browser_login_message(args.runtime_dir))
+        try:
+            runtime = browser_login(args.course_url, force_login=args.force_login, runtime_dir=args.runtime_dir)
+            print(f"Session navigateur enregistrée dans le runtime: {runtime}")
+        except RuntimeError as exc:
+            print(redact(exc), file=sys.stderr)
+            return 2
         return 0
     if args.mode == "browser":
         print("Selenium/Firefox requis pour ce fallback; mode browser non implémenté dans cette version.", file=sys.stderr)

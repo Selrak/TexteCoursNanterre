@@ -48,7 +48,13 @@ La commande prévue est:
 python3 ubicast_course_downloader.py "URL_DU_COURS" --login
 ```
 
-La version actuelle documente le chemin runtime et prépare le flux. Le fallback navigateur complet sera ajouté avec Selenium/Firefox si le mode `requests` ne suffit pas.
+Une fenêtre Firefox dédiée s'ouvre avec un profil conservé dans le runtime. Connectez-vous normalement, puis appuyez sur Entrée dans le terminal. L'outil enregistre ensuite les cookies dans le `.env` du runtime sans les afficher.
+
+Pour recommencer avec un profil propre:
+
+```sh
+python3 ubicast_course_downloader.py "URL_DU_COURS" --force-login
+```
 
 ## Utilisation
 
