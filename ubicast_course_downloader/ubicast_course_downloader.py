@@ -62,6 +62,8 @@ def is_login_page(text: str, url: str = "") -> bool:
     return any(marker in haystack for marker in (
         "authentification requise",
         "/login/index.php",
+        "cas.parisnanterre.fr/login",
+        "central authentication service",
         'name="username"',
         "name='username'",
         'type="password"',

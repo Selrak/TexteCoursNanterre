@@ -42,6 +42,11 @@ class ExtractorTests(unittest.TestCase):
         self.assertTrue(ucd.validate_vtt(b"\xef\xbb\xbfWEBVTT\n\n1\n"))
         self.assertFalse(ucd.validate_vtt(b"<html>Authentification requise</html>"))
 
+    def test_detects_cas_login_page(self):
+        html = "<title>CAS - Central Authentication Service Connexion</title>"
+        url = "https://cas.parisnanterre.fr/login?service=https%3A%2F%2Fcoursenligne.parisnanterre.fr%2Flogin%2Findex.php"
+        self.assertTrue(ucd.is_login_page(html, url))
+
 
 if __name__ == "__main__":
     unittest.main()
