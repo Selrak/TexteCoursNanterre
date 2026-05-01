@@ -67,3 +67,10 @@ Le script devra pour un seul tel fichier
 - Sortir tout le texte en omettant les lignes vides, le titre WEBVTT si présent, le compteur incrémental, et les horodatages
 - De manière optionelle : appeler l'API chatGPT pour proposer des découpages en paragraphes avec titres de parties et bornes temporelles de la partie.
 L'appel à l'API sera tel que la seule sortie demandée sera les horodatages de chaque partie et leur titre, sans recracher tout le texte.
+
+Si une question porte sur une erreur ou un problème d'une exécution récente de l'interface Tkinter, lire d'abord le fichier de log de session le plus récent dans `ubicast_course_downloader/downloads/logs/`.
+Ce fichier reprend la sortie visible de la zone "Activité" avec un horodatage à la seconde sur chaque ligne.
+
+Si l'utilisateur donne une nouvelle idée générale ou une nouvelle direction de produit, Codex doit la documenter dans `SPECIFICATIONS.md`.
+
+Quand un problème est résolu ou qu'une fonctionnalité est terminée, Codex doit créer un commit, puis pousser ce commit sur le dépôt GitHub.
