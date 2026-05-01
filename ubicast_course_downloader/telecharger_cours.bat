@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-py -3 telecharger_cours.py
-pause
+start "" "%LOCALAPPDATA%\Programs\Python\Python313\pythonw.exe" "%~dp0telecharger_cours.py"
+exit /b

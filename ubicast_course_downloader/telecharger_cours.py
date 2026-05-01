@@ -37,11 +37,14 @@ class App:
         self.root = tk.Tk()
         self.root.title("Télécharger un cours")
         self.root.geometry("720x460")
+        self.root.configure(bg="#f4f4f4")
 
         self.url_var = tk.StringVar()
-        self.status_var = tk.StringVar(value="Collez l'URL Moodle du cours.")
+        self.status_var = tk.StringVar(value="Prêt.")
 
-        tk.Label(self.root, text="URL Moodle du cours").pack(anchor="w", padx=16, pady=(16, 4))
+        tk.Label(self.root, text="Collez ci-dessous l'URL Moodle du cours", bg="#f4f4f4").pack(
+            anchor="w", padx=16, pady=(16, 4)
+        )
         self.url_entry = tk.Entry(self.root, textvariable=self.url_var, width=100)
         self.url_entry.pack(fill="x", padx=16)
         self.url_entry.focus_set()
@@ -49,17 +52,34 @@ class App:
         self.button = tk.Button(self.root, text="Télécharger et traiter", command=self.start)
         self.button.pack(anchor="w", padx=16, pady=12)
 
-        tk.Label(self.root, textvariable=self.status_var).pack(anchor="w", padx=16)
+        tk.Label(self.root, textvariable=self.status_var, bg="#f4f4f4").pack(anchor="w", padx=16)
 
-        self.log = tk.Text(self.root, height=18, wrap="word")
-        self.log.pack(fill="both", expand=True, padx=16, pady=(8, 16))
+        tk.Label(self.root, text="Activité", bg="#f4f4f4").pack(anchor="w", padx=16, pady=(12, 4))
+
+        log_frame = tk.Frame(self.root, bg="#e9e9e9", bd=1, relief="solid")
+        log_frame.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+
+        self.log = tk.Text(
+            log_frame,
+            height=18,
+            wrap="word",
+            bg="#f7f7f7",
+            fg="#222222",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            state=tk.DISABLED,
+        )
+        self.log.pack(fill="both", expand=True, padx=12, pady=12)
 
     def append_log(self, text):
         self.root.after(0, self._append_log, text)
 
     def _append_log(self, text):
+        self.log.config(state=tk.NORMAL)
         self.log.insert("end", text)
         self.log.see("end")
+        self.log.config(state=tk.DISABLED)
 
     def set_status(self, text):
         self.root.after(0, self.status_var.set, text)
@@ -70,7 +90,9 @@ class App:
             messagebox.showerror("URL manquante", "Collez l'URL Moodle du cours.")
             return
         self.button.config(state="disabled")
+        self.log.config(state=tk.NORMAL)
         self.log.delete("1.0", "end")
+        self.log.config(state=tk.DISABLED)
         thread = threading.Thread(target=self.run_pipeline, args=(url,), daemon=True)
         thread.start()
 
