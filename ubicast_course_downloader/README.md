@@ -58,6 +58,16 @@ python3 ubicast_course_downloader.py "URL_DU_COURS" --force-login
 
 ## Utilisation
 
+Interface simple:
+
+```sh
+python3 telecharger_cours.py
+```
+
+Cette fenêtre demande l'URL Moodle, télécharge les VTT, puis lance le traitement local vers le dossier `processed/`.
+
+Interface terminal:
+
 ```sh
 python3 ubicast_course_downloader.py "URL_DU_COURS" --dry-run
 python3 ubicast_course_downloader.py "URL_DU_COURS" --limit 1

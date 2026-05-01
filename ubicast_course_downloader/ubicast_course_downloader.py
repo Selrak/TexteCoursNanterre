@@ -22,6 +22,7 @@ UBICAST_PATH = "/mod/ubicast/view.php"
 VTT_RE = re.compile(r"https?://[^\s\"'<>]+?\.vtt(?:\?[^\s\"'<>]*)?", re.IGNORECASE)
 WEBTV_RE = re.compile(r"https?://webtv\.parisnanterre\.fr/[^\s\"'<>]+", re.IGNORECASE)
 SUBTITLE_HINT_RE = re.compile(r"(/[^\s\"'<>]*(?:subtitles|subtitle_)[^\s\"'<>]*?\.vtt(?:\?[^\s\"'<>]*)?)", re.IGNORECASE)
+LAST_COURSE_DIR: Optional[Path] = None
 
 
 @dataclass
@@ -307,6 +308,7 @@ def run_postprocess(command_template: str, course_dir: Path, manifest_csv: Path,
 
 
 def process_requests(args) -> int:
+    global LAST_COURSE_DIR
     context = ensure_authenticated(args.course_url, force_login=args.force_login, runtime_dir=args.runtime_dir)
     course_resp = safe_get(context.moodle_session, args.course_url)
     course_html = course_resp.text
@@ -328,6 +330,7 @@ def process_requests(args) -> int:
         return 0
 
     course_dir = Path(args.out) / sanitize_course_name(course_title, f"course_{get_course_id(args.course_url)}")
+    LAST_COURSE_DIR = course_dir
     dirs = make_dirs(course_dir)
     write_text(dirs["moodle_pages"] / "course.html", course_html)
 
@@ -424,6 +427,39 @@ def process_requests(args) -> int:
     return 0 if all(r.status in ("downloaded", "dry_run") for r in results) else 1
 
 
+def process_course_url(
+    course_url: str,
+    out: str = "downloads",
+    mode: str = "requests",
+    postprocess: bool = False,
+    runtime_dir: Optional[str] = None,
+    limit: Optional[int] = None,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> int:
+    global LAST_COURSE_DIR
+    LAST_COURSE_DIR = None
+    args = argparse.Namespace(
+        course_url=course_url,
+        out=out,
+        mode=mode,
+        postprocess=postprocess,
+        runtime_dir=runtime_dir,
+        limit=limit,
+        dry_run=dry_run,
+        verbose=verbose,
+        force_login=False,
+    )
+    if mode == "browser":
+        print("Selenium/Firefox requis pour ce fallback; mode browser non implémenté dans cette version.", file=sys.stderr)
+        return 3
+    return process_requests(args)
+
+
+def last_course_dir() -> Optional[Path]:
+    return LAST_COURSE_DIR
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Télécharge les sous-titres VTT UbiCast/WebTV d'un cours Moodle.")
     parser.add_argument("course_url", help="URL Moodle du cours")
@@ -446,11 +482,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(redact(exc), file=sys.stderr)
             return 2
         return 0
-    if args.mode == "browser":
-        print("Selenium/Firefox requis pour ce fallback; mode browser non implémenté dans cette version.", file=sys.stderr)
-        return 3
     try:
-        return process_requests(args)
+        return process_course_url(
+            course_url=args.course_url,
+            out=args.out,
+            mode=args.mode,
+            postprocess=args.postprocess,
+            runtime_dir=args.runtime_dir,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            verbose=args.verbose,
+        )
     except RuntimeError as exc:
         print(redact(exc), file=sys.stderr)
         return 2

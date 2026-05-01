@@ -77,6 +77,10 @@ class ExtractorTests(unittest.TestCase):
             self.assertTrue(env_path.exists())
             self.assertIn("MOODLE_COOKIE=", env_path.read_text(encoding="utf-8"))
 
+    def test_process_course_url_exists_for_gui(self):
+        self.assertTrue(callable(ucd.process_course_url))
+        self.assertIsNone(ucd.last_course_dir())
+
 
 if __name__ == "__main__":
     unittest.main()
