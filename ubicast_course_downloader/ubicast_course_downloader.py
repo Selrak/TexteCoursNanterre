@@ -170,6 +170,35 @@ def extract_webtv_urls(html: str, base_url: str) -> List[str]:
     return ordered_unique(urls)
 
 
+def extract_launch_urls(html: str, base_url: str) -> List[str]:
+    urls = []
+    soup = optional_soup(html)
+    if soup:
+        for tag in soup.find_all(["iframe", "a"], src=True):
+            urls.append(urljoin(base_url, tag["src"]))
+        for tag in soup.find_all(["iframe", "a"], href=True):
+            urls.append(urljoin(base_url, tag["href"]))
+    for value in re.findall(r"""(?:src|href)=["']([^"']*?/mod/ubicast/launch\.php[^"']*)["']""", html, flags=re.IGNORECASE):
+        urls.append(urljoin(base_url, value))
+    return ordered_unique([u for u in urls if "/mod/ubicast/launch.php" in urlparse(u).path])
+
+
+def extract_lti_form(html: str, base_url: str):
+    soup = optional_soup(html)
+    if not soup:
+        return None, {}
+    form = soup.find("form")
+    if not form or not form.get("action"):
+        return None, {}
+    action = urljoin(base_url, form["action"])
+    fields = {}
+    for node in form.find_all(["input", "textarea"]):
+        name = node.get("name")
+        if name:
+            fields[name] = node.get("value", "")
+    return action, fields
+
+
 def extract_vtt_urls(html: str, base_url: str) -> List[str]:
     urls = []
     soup = optional_soup(html)
@@ -189,6 +218,13 @@ def extract_vtt_urls(html: str, base_url: str) -> List[str]:
 def safe_get(session, url: str, timeout: int = 30):
     try:
         return session.get(url, timeout=timeout)
+    except Exception as exc:
+        raise RuntimeError(redact(exc)) from exc
+
+
+def safe_post(session, url: str, data: Dict[str, str], timeout: int = 30):
+    try:
+        return session.post(url, data=data, timeout=timeout, allow_redirects=True)
     except Exception as exc:
         raise RuntimeError(redact(exc)) from exc
 
@@ -315,15 +351,29 @@ def process_requests(args) -> int:
             write_text(dirs["moodle_pages"] / f"{i:02d}_id{result.moodle_activity_id}.html", activity_html)
             result.activity_title = extract_activity_title(activity_html)
 
+            launch_urls = extract_launch_urls(activity_html, activity_resp.url)
             webtv_urls = extract_webtv_urls(activity_html, activity_resp.url)
-            if not webtv_urls:
+            if not launch_urls and not webtv_urls:
                 result.status = "needs_browser"
                 result.error = "VTT non présent dans HTML : essayer mode browser"
                 results.append(result)
                 continue
-            result.webtv_url = webtv_urls[0]
 
-            webtv_resp = safe_get(context.webtv_session, result.webtv_url)
+            if launch_urls:
+                launch_resp = safe_get(context.moodle_session, launch_urls[0])
+                launch_html = launch_resp.text
+                action, fields = extract_lti_form(launch_html, launch_resp.url)
+                if not action:
+                    result.status = "needs_browser"
+                    result.error = "Formulaire LTI WebTV introuvable : essayer mode browser"
+                    results.append(result)
+                    continue
+                result.webtv_url = action
+                webtv_resp = safe_post(context.webtv_session, action, fields)
+            else:
+                result.webtv_url = webtv_urls[0]
+                webtv_resp = safe_get(context.webtv_session, result.webtv_url)
+
             webtv_html = webtv_resp.text
             if is_login_page(webtv_html, webtv_resp.url) or "Authentification requise" in webtv_html:
                 result.status = "auth_expired"
@@ -340,6 +390,7 @@ def process_requests(args) -> int:
                 continue
             result.vtt_url = vtt_urls[0]
 
+            context.webtv_session.headers["Referer"] = webtv_resp.url
             vtt_resp = safe_get(context.webtv_session, result.vtt_url)
             content_type = vtt_resp.headers.get("Content-Type", "")
             content = vtt_resp.content

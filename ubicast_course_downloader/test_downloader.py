@@ -41,6 +41,22 @@ class ExtractorTests(unittest.TestCase):
         self.assertIn("https://webtv.parisnanterre.fr/protected/videos/a/subtitles/subtitle_fr.vtt", urls)
         self.assertIn("https://webtv.parisnanterre.fr/protected/videos/b/subtitles/subtitle_en.vtt", urls)
 
+    def test_extract_launch_urls(self):
+        html = '<iframe src="/mod/ubicast/launch.php?id=219186&mediaid=vabc"></iframe>'
+        urls = ucd.extract_launch_urls(html, "https://coursenligne.parisnanterre.fr/mod/ubicast/view.php?id=219186")
+        self.assertEqual(urls, ["https://coursenligne.parisnanterre.fr/mod/ubicast/launch.php?id=219186&mediaid=vabc"])
+
+    def test_extract_lti_form(self):
+        html = """
+        <form action="https://webtv.parisnanterre.fr/lti/vabc/" method="post">
+          <input type="hidden" name="oauth_nonce" value="nonce">
+          <input type="hidden" name="resource_link_id" value="link">
+        </form>
+        """
+        action, fields = ucd.extract_lti_form(html, "https://coursenligne.parisnanterre.fr/mod/ubicast/launch.php?id=1")
+        self.assertEqual(action, "https://webtv.parisnanterre.fr/lti/vabc/")
+        self.assertEqual(fields["oauth_nonce"], "nonce")
+
     def test_validate_vtt_accepts_bom(self):
         self.assertTrue(ucd.validate_vtt(b"\xef\xbb\xbfWEBVTT\n\n1\n"))
         self.assertFalse(ucd.validate_vtt(b"<html>Authentification requise</html>"))

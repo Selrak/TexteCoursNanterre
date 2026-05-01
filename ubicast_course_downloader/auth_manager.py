@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import stat
+from http.cookies import SimpleCookie
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -119,7 +120,10 @@ def _build_session(cookie: str = "", referer: str = ""):
     if referer:
         session.headers["Referer"] = referer
     if cookie and "..." not in cookie:
-        session.headers["Cookie"] = cookie
+        parsed = SimpleCookie()
+        parsed.load(cookie)
+        for name, morsel in parsed.items():
+            session.cookies.set(name, morsel.value)
     return session
 
 
