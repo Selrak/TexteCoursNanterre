@@ -10,6 +10,8 @@ Le projet reçoit l'URL d'un cours sur la plateforme de Nanterre.
 
 Il doit ensuite trouver les séances du cours, extraire les sous-titres disponibles, puis lancer le post-traitement qui transforme ces sous-titres en texte exploitable.
 
+Certaines séances peuvent ne pas avoir de vidéo ou de sous-titres, par exemple si le professeur était absent, a donné un texte à travailler, a prévu un TD ou a publié un cours écrit. Dans ce cas, l'application doit ignorer la séance concernée, continuer avec les suivantes, et signaler clairement à la fin quelles séances n'ont pas produit de texte.
+
 ## Authentification
 
 Le projet utilise les cookies cachés quand ils sont disponibles et valides.
@@ -31,3 +33,5 @@ Dans l'interface utilisateur, le vocabulaire doit privilégier `coursenligne` pl
 Le développeur principal a besoin de logs et d'informations suffisamment précises pour diagnostiquer les échecs.
 
 Les diagnostics doivent rester utiles sans exposer de secrets comme les cookies, jetons de session ou en-têtes d'authentification.
+
+La zone `Activité` de l'interface doit rester compréhensible pour l'utilisatrice principale. Les détails techniques nécessaires au diagnostic doivent aller dans le fichier de log de session, sans être affichés dans cette zone.

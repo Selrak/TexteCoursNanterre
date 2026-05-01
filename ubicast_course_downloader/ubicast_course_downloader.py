@@ -240,6 +240,10 @@ def write_bytes(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
+def file_details(path: Path) -> Dict[str, object]:
+    return {"path": str(path), "exists": path.exists(), "bytes": path.stat().st_size if path.exists() else 0}
+
+
 def validate_vtt(content: bytes) -> bool:
     if content.startswith(b"\xef\xbb\xbf"):
         content = content[3:]
@@ -346,16 +350,25 @@ def process_requests(args) -> int:
         try:
             activity_resp = safe_get(context.moodle_session, activity_url)
             activity_html = activity_resp.text
+            result.details["activity_http_status"] = activity_resp.status_code
+            result.details["activity_final_url"] = activity_resp.url
+            result.details["activity_html_bytes"] = len(activity_html.encode("utf-8", errors="replace"))
             if is_login_page(activity_html, activity_resp.url):
                 result.status = "auth_expired"
                 result.error = "Authentification CAS/MFA absente ou expirée"
                 results.append(result)
                 continue
-            write_text(dirs["moodle_pages"] / f"{i:02d}_id{result.moodle_activity_id}.html", activity_html)
+            activity_html_path = dirs["moodle_pages"] / f"{i:02d}_id{result.moodle_activity_id}.html"
+            write_text(activity_html_path, activity_html)
+            result.details["activity_html_file"] = file_details(activity_html_path)
             result.activity_title = extract_activity_title(activity_html)
 
             launch_urls = extract_launch_urls(activity_html, activity_resp.url)
             webtv_urls = extract_webtv_urls(activity_html, activity_resp.url)
+            result.details["launch_url_count"] = len(launch_urls)
+            result.details["launch_urls"] = launch_urls
+            result.details["webtv_url_count_from_activity"] = len(webtv_urls)
+            result.details["webtv_urls_from_activity"] = webtv_urls
             if not launch_urls and not webtv_urls:
                 result.status = "needs_browser"
                 result.error = "VTT non présent dans HTML : essayer mode browser"
@@ -365,7 +378,12 @@ def process_requests(args) -> int:
             if launch_urls:
                 launch_resp = safe_get(context.moodle_session, launch_urls[0])
                 launch_html = launch_resp.text
+                result.details["launch_http_status"] = launch_resp.status_code
+                result.details["launch_final_url"] = launch_resp.url
+                result.details["launch_html_bytes"] = len(launch_html.encode("utf-8", errors="replace"))
                 action, fields = extract_lti_form(launch_html, launch_resp.url)
+                result.details["lti_action"] = action or ""
+                result.details["lti_field_names"] = sorted(fields)
                 if not action:
                     result.status = "needs_browser"
                     result.error = "Formulaire LTI WebTV introuvable : essayer mode browser"
@@ -378,14 +396,22 @@ def process_requests(args) -> int:
                 webtv_resp = safe_get(context.webtv_session, result.webtv_url)
 
             webtv_html = webtv_resp.text
+            result.details["webtv_http_status"] = webtv_resp.status_code
+            result.details["webtv_final_url"] = webtv_resp.url
+            result.details["webtv_content_type"] = webtv_resp.headers.get("Content-Type", "")
+            result.details["webtv_html_bytes"] = len(webtv_html.encode("utf-8", errors="replace"))
             if is_login_page(webtv_html, webtv_resp.url) or "Authentification requise" in webtv_html:
                 result.status = "auth_expired"
                 result.error = "Cookie WebTV absent ou expiré"
                 results.append(result)
                 continue
-            write_text(dirs["webtv_pages"] / f"{i:02d}_id{result.moodle_activity_id}.html", webtv_html)
+            webtv_html_path = dirs["webtv_pages"] / f"{i:02d}_id{result.moodle_activity_id}.html"
+            write_text(webtv_html_path, webtv_html)
+            result.details["webtv_html_file"] = file_details(webtv_html_path)
 
             vtt_urls = extract_vtt_urls(webtv_html, webtv_resp.url)
+            result.details["vtt_url_count"] = len(vtt_urls)
+            result.details["vtt_urls"] = vtt_urls
             if not vtt_urls:
                 result.status = "needs_browser"
                 result.error = "VTT non présent dans HTML : essayer mode browser"
@@ -397,6 +423,9 @@ def process_requests(args) -> int:
             vtt_resp = safe_get(context.webtv_session, result.vtt_url)
             content_type = vtt_resp.headers.get("Content-Type", "")
             content = vtt_resp.content
+            result.details["vtt_http_status"] = vtt_resp.status_code
+            result.details["vtt_content_type"] = content_type
+            result.details["vtt_bytes"] = len(content)
             if b"<html" in content[:500].lower() or not validate_vtt(content):
                 result.status = "error"
                 result.error = "Réponse HTML reçue à la place d'un VTT" if "html" in content_type.lower() else "Fichier VTT invalide"
@@ -406,6 +435,7 @@ def process_requests(args) -> int:
                 continue
             out_file = dirs["vtt"] / output_name(i, activity_url)
             write_bytes(out_file, content)
+            result.details["output_vtt_file"] = file_details(out_file)
             result.output_vtt_file = str(out_file)
             result.status = "downloaded"
         except Exception as exc:
