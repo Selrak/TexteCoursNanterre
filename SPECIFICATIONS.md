@@ -24,6 +24,8 @@ L'utilisatrice principale utilise Windows 11 Famille sur un laptop Dell, avec Ch
 
 L'interface destinée à l'utilisatrice principale doit donc être très simple, explicite et sans mystère. Elle ne doit pas demander de comprendre les cookies, les fichiers cachés, les modes techniques ou les détails internes du téléchargement.
 
+Dans l'interface utilisateur, le vocabulaire doit privilégier `coursenligne` plutôt que `Moodle`, car c'est le nom que l'utilisatrice connaît. Les termes techniques comme Moodle peuvent rester dans le code ou dans les diagnostics destinés au développement quand ils sont nécessaires.
+
 ## Diagnostic
 
 Le développeur principal a besoin de logs et d'informations suffisamment précises pour diagnostiquer les échecs.

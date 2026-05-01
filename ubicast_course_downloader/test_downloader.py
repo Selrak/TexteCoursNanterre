@@ -86,7 +86,7 @@ class ExtractorTests(unittest.TestCase):
         with mock.patch("auth_manager.platform.system", return_value="Windows"):
             with mock.patch.dict("auth_manager.os.environ", {"APPDATA": r"C:\Users\Test\AppData\Roaming"}, clear=True):
                 path = auth_manager.runtime_path()
-        self.assertEqual(str(path), r"C:\Users\Test\AppData\Roaming/ubicast-course-downloader")
+        self.assertEqual(str(path).replace("\\", "/"), "C:/Users/Test/AppData/Roaming/ubicast-course-downloader")
 
 
 if __name__ == "__main__":

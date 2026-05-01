@@ -249,11 +249,11 @@ def browser_login(
                 current_host = urlparse(driver.current_url).netloc
                 cookies = _cookie_header(driver.get_cookies())
                 if "coursenligne.parisnanterre.fr" in current_host and "MoodleSession=" in cookies:
-                    print("Connexion Moodle détectée.")
+                    print("Connexion CAS/MFA détectée.")
                     break
                 time.sleep(1)
             else:
-                raise RuntimeError("Authentification Moodle non détectée avant expiration du délai.")
+                raise RuntimeError("Authentification CAS/MFA non détectée avant expiration du délai.")
         elif confirm_callback is None:
             print("Connectez-vous dans la fenêtre du navigateur dédiée, puis appuyez sur Entrée ici.")
             try:

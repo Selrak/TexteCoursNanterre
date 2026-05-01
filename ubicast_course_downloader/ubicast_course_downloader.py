@@ -313,7 +313,7 @@ def process_requests(args) -> int:
     course_resp = safe_get(context.moodle_session, args.course_url)
     course_html = course_resp.text
     if is_login_page(course_html, course_resp.url):
-        print("Cookie Moodle absent ou expiré", file=sys.stderr)
+        print("Authentification CAS/MFA absente ou expirée", file=sys.stderr)
         return 2
     if course_resp.status_code >= 400:
         print(f"Erreur Moodle HTTP {course_resp.status_code}", file=sys.stderr)
@@ -348,7 +348,7 @@ def process_requests(args) -> int:
             activity_html = activity_resp.text
             if is_login_page(activity_html, activity_resp.url):
                 result.status = "auth_expired"
-                result.error = "Cookie Moodle absent ou expiré"
+                result.error = "Authentification CAS/MFA absente ou expirée"
                 results.append(result)
                 continue
             write_text(dirs["moodle_pages"] / f"{i:02d}_id{result.moodle_activity_id}.html", activity_html)
