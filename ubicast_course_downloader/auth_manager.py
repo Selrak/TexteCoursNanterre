@@ -58,7 +58,8 @@ def ensure_runtime_dir(runtime_dir: Optional[str] = None) -> Path:
     path = runtime_path(runtime_dir)
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
-        path.chmod(stat.S_IRWXU)
+        if platform.system() != "Windows":
+            path.chmod(stat.S_IRWXU)
     except OSError:
         pass
     return path

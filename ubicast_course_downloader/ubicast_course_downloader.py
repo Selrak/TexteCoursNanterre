@@ -220,14 +220,57 @@ def safe_get(session, url: str, timeout: int = 30):
     try:
         return session.get(url, timeout=timeout)
     except Exception as exc:
-        raise RuntimeError(redact(exc)) from exc
+        message = redact(exc)
+        response = getattr(exc, "response", None)
+        if response is not None:
+            history = []
+            for hop in getattr(response, "history", []) or []:
+                location = hop.headers.get("Location", "")
+                history.append(f"{hop.status_code} {hop.url} -> {location}")
+            final_location = response.headers.get("Location", "")
+            extra = [
+                f"requested_url={url}",
+                f"response_url={getattr(response, 'url', '')}",
+                f"response_status={getattr(response, 'status_code', '')}",
+                f"response_location={final_location}",
+            ]
+            if history:
+                extra.append("redirect_history=" + " | ".join(history))
+            message = message + " (" + "; ".join(extra) + ")"
+        raise RuntimeError(message) from exc
 
 
 def safe_post(session, url: str, data: Dict[str, str], timeout: int = 30):
     try:
         return session.post(url, data=data, timeout=timeout, allow_redirects=True)
     except Exception as exc:
-        raise RuntimeError(redact(exc)) from exc
+        message = redact(exc)
+        response = getattr(exc, "response", None)
+        if response is not None:
+            history = []
+            for hop in getattr(response, "history", []) or []:
+                location = hop.headers.get("Location", "")
+                history.append(f"{hop.status_code} {hop.url} -> {location}")
+            final_location = response.headers.get("Location", "")
+            extra = [
+                f"requested_url={url}",
+                f"response_url={getattr(response, 'url', '')}",
+                f"response_status={getattr(response, 'status_code', '')}",
+                f"response_location={final_location}",
+            ]
+            if history:
+                extra.append("redirect_history=" + " | ".join(history))
+            message = message + " (" + "; ".join(extra) + ")"
+        raise RuntimeError(message) from exc
+
+
+def is_redirect_auth_error(exc: Exception) -> bool:
+    message = redact(exc).lower()
+    return "redirect" in message and (
+        "cas.parisnanterre.fr" in message
+        or "coursenligne.parisnanterre.fr/login/index.php" in message
+        or "login/index.php" in message
+    )
 
 
 def write_text(path: Path, text: str) -> None:
@@ -314,7 +357,13 @@ def run_postprocess(command_template: str, course_dir: Path, manifest_csv: Path,
 def process_requests(args) -> int:
     global LAST_COURSE_DIR
     context = ensure_authenticated(args.course_url, force_login=args.force_login, runtime_dir=args.runtime_dir)
-    course_resp = safe_get(context.moodle_session, args.course_url)
+    try:
+        course_resp = safe_get(context.moodle_session, args.course_url)
+    except RuntimeError as exc:
+        if is_redirect_auth_error(exc):
+            print("Authentification CAS/MFA absente ou expirée", file=sys.stderr)
+            return 2
+        raise
     course_html = course_resp.text
     if is_login_page(course_html, course_resp.url):
         print("Authentification CAS/MFA absente ou expirée", file=sys.stderr)
@@ -348,7 +397,16 @@ def process_requests(args) -> int:
             moodle_activity_url=activity_url,
         )
         try:
-            activity_resp = safe_get(context.moodle_session, activity_url)
+            try:
+                activity_resp = safe_get(context.moodle_session, activity_url)
+            except RuntimeError as exc:
+                if is_redirect_auth_error(exc):
+                    result.status = "auth_expired"
+                    result.error = "Authentification CAS/MFA absente ou expirée"
+                    result.details["activity_redirect_error"] = redact(exc)
+                    results.append(result)
+                    continue
+                raise
             activity_html = activity_resp.text
             result.details["activity_http_status"] = activity_resp.status_code
             result.details["activity_final_url"] = activity_resp.url
@@ -376,7 +434,16 @@ def process_requests(args) -> int:
                 continue
 
             if launch_urls:
-                launch_resp = safe_get(context.moodle_session, launch_urls[0])
+                try:
+                    launch_resp = safe_get(context.moodle_session, launch_urls[0])
+                except RuntimeError as exc:
+                    if is_redirect_auth_error(exc):
+                        result.status = "auth_expired"
+                        result.error = "Authentification CAS/MFA absente ou expirée"
+                        result.details["launch_redirect_error"] = redact(exc)
+                        results.append(result)
+                        continue
+                    raise
                 launch_html = launch_resp.text
                 result.details["launch_http_status"] = launch_resp.status_code
                 result.details["launch_final_url"] = launch_resp.url
@@ -390,10 +457,28 @@ def process_requests(args) -> int:
                     results.append(result)
                     continue
                 result.webtv_url = action
-                webtv_resp = safe_post(context.webtv_session, action, fields)
+                try:
+                    webtv_resp = safe_post(context.webtv_session, action, fields)
+                except RuntimeError as exc:
+                    if is_redirect_auth_error(exc):
+                        result.status = "auth_expired"
+                        result.error = "Authentification CAS/MFA absente ou expirée"
+                        result.details["webtv_post_redirect_error"] = redact(exc)
+                        results.append(result)
+                        continue
+                    raise
             else:
                 result.webtv_url = webtv_urls[0]
-                webtv_resp = safe_get(context.webtv_session, result.webtv_url)
+                try:
+                    webtv_resp = safe_get(context.webtv_session, result.webtv_url)
+                except RuntimeError as exc:
+                    if is_redirect_auth_error(exc):
+                        result.status = "auth_expired"
+                        result.error = "Authentification CAS/MFA absente ou expirée"
+                        result.details["webtv_redirect_error"] = redact(exc)
+                        results.append(result)
+                        continue
+                    raise
 
             webtv_html = webtv_resp.text
             result.details["webtv_http_status"] = webtv_resp.status_code
@@ -420,7 +505,16 @@ def process_requests(args) -> int:
             result.vtt_url = vtt_urls[0]
 
             context.webtv_session.headers["Referer"] = webtv_resp.url
-            vtt_resp = safe_get(context.webtv_session, result.vtt_url)
+            try:
+                vtt_resp = safe_get(context.webtv_session, result.vtt_url)
+            except RuntimeError as exc:
+                if is_redirect_auth_error(exc):
+                    result.status = "auth_expired"
+                    result.error = "Authentification CAS/MFA absente ou expirée"
+                    result.details["vtt_redirect_error"] = redact(exc)
+                    results.append(result)
+                    continue
+                raise
             content_type = vtt_resp.headers.get("Content-Type", "")
             content = vtt_resp.content
             result.details["vtt_http_status"] = vtt_resp.status_code

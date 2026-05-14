@@ -406,8 +406,12 @@ class App:
             self.root.after(0, lambda: messagebox.showinfo("Terminé", message))
         except Exception as exc:
             self.set_status("Erreur.")
-            self.append_log(f"\nErreur: {exc}\n")
-            self.root.after(0, lambda: messagebox.showerror("Erreur", str(exc)))
+            self.append_technical_log(f"pipeline_exception={type(exc).__name__}: {exc}")
+            visible_error = str(exc)
+            if "redirect" in visible_error.lower():
+                visible_error = "le site de cours a redirigé en boucle"
+            self.append_log(f"\nErreur: {visible_error}\n")
+            self.root.after(0, lambda: messagebox.showerror("Erreur", visible_error))
         finally:
             writer.close()
             self.log_writer = None
